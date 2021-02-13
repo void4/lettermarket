@@ -6,8 +6,11 @@ from copy import deepcopy
 from random import choice, randint, random
 
 import twitch
+import pygame
 
 from utils import Every
+
+en1000 = [word.upper() for word in open("en1000.txt").read().splitlines()]
 
 everysecond = Every(1)
 everyminute = Every(5)#XXX 60
@@ -52,8 +55,18 @@ def subtract(letterbank, word):
 		return False
 
 def genword(letterbank):
-
 	# random legal word?
+	copied = deepcopy(letterbank)
+	totalletters = sum(copied.values())
+
+	possible = [word for word in en1000 if len(word) <= sum(copied.values())]
+
+	for word in possible:
+		if cansubtract(letterbank, word):
+			return word
+
+def genrandword(letterbank):
+
 
 	# if letterbank empty, return None
 	copied = deepcopy(letterbank)
@@ -78,7 +91,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	#print("MESSAGE", message.sender, message.text)
 
-	user = f"user{randint(0,4)}"
+	user = f"user{randint(0,2)}"
 
 	rand = random()
 
@@ -113,6 +126,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		if subtract(letterbanks[user], word):
 			wordbanks[user][word] += 1
+			print(wordbanks)
 			txlog.append([user, cmd])
 
 	elif cmd[0] == "bid" and len(cmd) >= 3:
@@ -144,6 +158,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		wordmarkets[word].append([user, amount])
 
+		print(wordmarkets)
 		txlog.append([user, cmd])
 
 tmi = twitch.tmi.TMI(config["client_id"], config["client_secret"])
@@ -159,13 +174,39 @@ try:
 except KeyboardInterrupt:
 	pass
 
+
+
+pygame.init()
+pygame.font.init()
+
+FONTSIZE = 16
+
+font = pygame.font.SysFont("Mono", FONTSIZE)
+
+pygame.display.set_caption("lettermarket")
+
+color = (0, 0, 0)
+
+w = 640
+h = 480
+
+screen = pygame.display.set_mode((w,h))
+
+def renderText(text, pos, color=(255,255,255)):
+	img = font.render(text, True, color)
+	screen.blit(img, pos)
+
 lastcheck = time()
 
 active = []
 
 # alternative: just increment by one every second, stop on leave
 
-while True:
+running = True
+
+while running:
+
+	screen.fill(color)
 
 	if everyminute:
 		# Settle auctions
@@ -200,7 +241,7 @@ while True:
 
 	if everysecond:
 		#XXX active = [chatter.name for chatter in tmi.chatters(config["channel"]).all()] + [None]
-		active = [f"user{i}" for i in range(5)] + [None]
+		active = list(set([f"user{i}" for i in range(3)] + [None]))
 
 	now = time()
 
@@ -213,3 +254,31 @@ while True:
 
 	#if currencybank:
 	#	print(min(currencybank.values()), max(currencybank.values()), len(currencybank), len(active), Counter(currencybank.values()))
+
+	for index, (user, cmd) in enumerate(txlog[-10:]):
+		renderText(f"<{user}> {' '.join(cmd)}", (w-300, index*FONTSIZE))
+
+	for index, (letter, bids) in enumerate(auctions.items()):
+		if bids:
+			maxbid = max([bid[1] for bid in bids])
+		else:
+			maxbid = None
+
+		renderText(f"{letter}: {maxbid}", (w//2-100, index*FONTSIZE))
+
+	wordsells = []
+
+	for word, sells in wordmarkets.items():
+		minsell = min(sells, key=lambda sell:sell[1])
+		wordsells.append([word, minsell[0], minsell[1]])
+
+	wordsells = sorted(wordsells, key=lambda ws:ws[2])
+
+	for index, wordsell in enumerate(wordsells):
+		renderText(f"{wordsell[0]}: {wordsell[2]} by {wordsell[1]}", (0, index*FONTSIZE))
+
+	for event in pygame.event.get():
+		if event.type == pygame.QUIT:
+			running = False
+
+	pygame.display.flip()
