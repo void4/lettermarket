@@ -7,8 +7,14 @@ from random import choice, randint, random
 
 import twitch
 import pygame
+from pygame.rect import Rect
+import pygame_gui
+from pygame_gui.elements.ui_text_entry_line import UITextEntryLine
+from pygame_gui.elements.ui_text_box import UITextBox
 
 from utils import Every
+
+WRITER_COINS_PER_SECOND = 5
 
 en1000 = [word.upper() for word in open("en1000.txt").read().splitlines()]
 
@@ -19,6 +25,8 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 config = config["DEFAULT"]
+
+WRITER = config["nickname"]
 
 currencybank = Counter()
 letterbanks = defaultdict(Counter)
@@ -32,7 +40,7 @@ wordmarkets = defaultdict(list)
 
 # in text box, allow greyed out words?
 
-characters = ascii_uppercase[:3]
+characters = ascii_uppercase#[:3]
 
 for char in characters:
 	auctions[char]
@@ -91,25 +99,33 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	#print("MESSAGE", message.sender, message.text)
 
-	user = f"user{randint(0,2)}"
-
-	rand = random()
-
-	if rand < 0.1:
-		cmd = f"!combine {genword(letterbanks[user])}"
-	elif rand < 0.2:
-		writermoney = currencybank[None]
-		if writermoney < 3:
-			return
-		wordbank = wordbanks[user]
-		if len(wordbank.keys()) == 0:
-			return
-		cmd = f"!sell {choice(list(wordbank.keys()))} {randint(3,writermoney)}"
-	else:
-		cmd = f"!bid {choice(characters)} {randint(1,10)}"
-
 	#XXX user = message.sender
 
+	# Simulate
+	if random() < 0.95:
+		user = f"user{randint(0,2)}"
+
+		rand = random()
+
+		if rand < 0.1:
+			cmd = f"!combine {genword(letterbanks[user])}"
+		elif rand < 0.2:
+			writermoney = currencybank[WRITER]
+			if writermoney < 3:
+				return
+			wordbank = wordbanks[user]
+			if len(wordbank.keys()) == 0:
+				return
+			cmd = f"!sell {choice(list(wordbank.keys()))} {randint(3,writermoney)}"
+		else:
+			cmd = f"!bid {choice(characters)} {randint(1,10)}"
+
+	else:
+		available_words = list(wordmarkets.keys())
+		if not available_words:
+			return
+		user = WRITER
+		cmd =  f"!buy {choice(available_words)}"
 
 
 	if not cmd.startswith("!"):
@@ -133,6 +149,9 @@ def handle_message(message: twitch.chat.Message) -> None:
 		letter = cmd[1]
 		amount = int(cmd[2])#XXX ValueError
 
+		if amount < 1:
+			return
+
 		# can't bid more than you have in that moment # apply to total bids?
 		if currencybank[user] < amount:
 			return
@@ -143,9 +162,17 @@ def handle_message(message: twitch.chat.Message) -> None:
 	elif cmd[0] == "sell" and len(cmd) >= 3:
 		word = cmd[1]
 		amount = int(cmd[2])
+
+		if amount < 1:
+			return
+
+		# TODO max amount
+		if amount >= 1000000:
+			return
+
 		# Also add timestamp to order
 		# Can't sell for more than writer posesses currently?
-		#if amount >= currencybank[None]
+		#if amount >= currencybank[WRITER]
 
 		# can only sell words one owns
 		if wordbanks[user][word] == 0:
@@ -160,6 +187,26 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		print(wordmarkets)
 		txlog.append([user, cmd])
+
+	elif user == WRITER and cmd[0] == "buy" and len(cmd) >= 2:
+		word = cmd[1]
+		lowestsell = min(wordmarkets[word], key=lambda sp:sp[1])
+		seller, amount = lowestsell
+		if currencybank[WRITER] < amount:
+			return
+
+		if wordbanks[seller][word] <= 0:
+			return
+
+		wordbanks[seller][word] -= 1
+		# Neat trick to remove zero and negative counts from a Counter
+		wordbanks[seller] += Counter()
+
+		wordbanks[WRITER][word] += 1
+
+		currencybank[WRITER] -= amount
+		currencybank[seller] += amount
+
 
 tmi = twitch.tmi.TMI(config["client_id"], config["client_secret"])
 
@@ -185,26 +232,33 @@ font = pygame.font.SysFont("Mono", FONTSIZE)
 
 pygame.display.set_caption("lettermarket")
 
-color = (0, 0, 0)
+color = (100, 100, 100)
 
-w = 640
-h = 480
+w = 1920//2
+h = 1080
 
 screen = pygame.display.set_mode((w,h))
+
+manager = pygame_gui.UIManager((w, h))
 
 def renderText(text, pos, color=(255,255,255)):
 	img = font.render(text, True, color)
 	screen.blit(img, pos)
+	return pos[0] + img.get_rect()[2]
 
 lastcheck = time()
 
 active = []
-
+clock = pygame.time.Clock()
 # alternative: just increment by one every second, stop on leave
+
+text_input = UITextEntryLine(Rect(20, 200, 200, 200), manager)
 
 running = True
 
 while running:
+
+	time_delta = clock.tick(60)/1000.0
 
 	screen.fill(color)
 
@@ -213,6 +267,7 @@ while running:
 		print("Settling auctions...")
 
 		highestbids = {}
+		# TODO visibly, slowly iterate and resolve?
 		for letter, bids in auctions.items():
 
 			# Sort bids by highest price first
@@ -233,15 +288,15 @@ while running:
 
 			highestbids[letter] = highestbid
 
-		print(highestbids)
+		#print(highestbids)
 
 		auctions = defaultdict(list)
 		for char in characters:
 			auctions[char]
 
 	if everysecond:
-		#XXX active = [chatter.name for chatter in tmi.chatters(config["channel"]).all()] + [None]
-		active = list(set([f"user{i}" for i in range(3)] + [None]))
+		#XXX active = [chatter.name for chatter in tmi.chatters(config["channel"]).all()]
+		active = list(set([f"user{i}" for i in range(3)]))
 
 	now = time()
 
@@ -250,7 +305,9 @@ while running:
 	lastcheck = lastcheck + fullseconds
 
 	for user in active:
-		currencybank[user] += fullseconds
+		currencybank[user] += fullseconds#TODO *follower/subscriber multipler
+
+	currencybank[WRITER] += fullseconds * WRITER_COINS_PER_SECOND
 
 	#if currencybank:
 	#	print(min(currencybank.values()), max(currencybank.values()), len(currencybank), len(active), Counter(currencybank.values()))
@@ -275,10 +332,40 @@ while running:
 	wordsells = sorted(wordsells, key=lambda ws:ws[2])
 
 	for index, wordsell in enumerate(wordsells):
-		renderText(f"{wordsell[0]}: {wordsell[2]} by {wordsell[1]}", (0, index*FONTSIZE))
+		renderText(f"{str(wordsell[2]).rjust(4, ' ')}: {wordsell[0]} by {wordsell[1]}", (0, index*FONTSIZE))
+
+	y = h-100
+	currency = currencybank[WRITER]
+	x = renderText(str(currency).rjust(8, ' '), (0, y))
+
+	wordbank = wordbanks[WRITER]
+	inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
+	x = renderText(inventorystring, (x, y))
+
+	for index, user in enumerate(active):
+		if user == WRITER:
+			continue
+
+		y = h-100-FONTSIZE-FONTSIZE*index
+
+		currency = currencybank[user]
+		x = renderText(str(currency).rjust(8, ' '), (0, y))
+
+		letterbank = letterbanks[user]
+		#inventorystring = " ".join(f"{letter}({count})" for letter, count in sorted(letterbank.items(), key=lambda lc:lc[1], reverse=True))
+		inventorystring = (" "*8) + "".join(sorted("".join([letter*count for letter, count in letterbank.items()])))
+		x = renderText(inventorystring, (x, y))
+
+		wordbank = wordbanks[user]
+		inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
+		x = renderText(inventorystring, (x, y))
 
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			running = False
 
+		manager.process_events(event)
+
+	manager.update(time_delta)
+	manager.draw_ui(screen)
 	pygame.display.flip()
