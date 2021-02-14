@@ -41,12 +41,12 @@ wordmarkets = defaultdict(list)
 
 # in text box, allow greyed out words?
 
-characters = ascii_uppercase#[:3]
+characters = ascii_uppercase# + ".,;?!"#[:3]
 
 for char in characters:
 	auctions[char]
 
-print(auctions)
+#print(auctions)
 
 def cansubtract(letterbank, word):
 	letters = Counter(word)
@@ -170,7 +170,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		if subtract(letterbanks[user], word):
 			wordbanks[user][word] += 1
-			print(wordbanks)
+			#print(wordbanks)
 			txlog.append([user, cmd])
 
 	elif cmd[0] == "bid" and len(cmd) >= 3:
@@ -345,6 +345,28 @@ while running:
 				if event.ui_element in buybuttons:
 					wordsell = buybuttons[event.ui_element]
 					buy_word(wordsell[0])
+			elif event.user_type == pygame_gui.UI_TEXT_ENTRY_CHANGED:
+				text = event.ui_element.text
+				print("changed", text)
+				if text[-1] != " ":
+					continue
+
+				tmp = deepcopy(wordbanks[WRITER])
+				result = []
+				for word in text.split():
+					print(word, tmp)
+					if tmp[word.upper()] <= 0:
+						continue
+					tmp[word.upper()] -= 1
+					result.append(word)
+
+				text = " ".join(result)
+				if len(text) > 0:
+					text += " "
+				event.ui_element.text = text
+
+		manager.process_events(event)
+
 
 	for index, (user, cmd) in enumerate(txlog[-10:]):
 		renderText(f"<{user}> {' '.join(cmd)}", (w-300, index*FONTSIZE))
@@ -370,6 +392,7 @@ while running:
 
 	wordsells = sorted(wordsells, key=lambda ws:ws[2])
 
+	# Have to reuse old buttons to preserve button press events
 	for index, wordsell in enumerate(wordsells):
 		wordsellstring = f"{str(wordsell[2]).rjust(4, ' ')}: {wordsell[0]} by {wordsell[1]}"
 		#renderText(wordsellstring, (0, index*FONTSIZE))
@@ -418,7 +441,7 @@ while running:
 		inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
 		x = renderText(inventorystring, (x, y))
 
-		manager.process_events(event)
+
 
 	manager.update(time_delta)
 	manager.draw_ui(screen)
