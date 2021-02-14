@@ -9,6 +9,7 @@ import twitch
 import pygame
 from pygame.rect import Rect
 import pygame_gui
+from pygame_gui.elements.ui_button import UIButton
 from pygame_gui.elements.ui_text_entry_line import UITextEntryLine
 from pygame_gui.elements.ui_text_box import UITextBox
 
@@ -92,7 +93,31 @@ def genrandword(letterbank):
 
 	return word
 
+
 txlog = []
+
+def buy_word(word, buyer=WRITER, maxprice=None):
+	wordmarket = wordmarkets[word]
+	if not wordmarket:
+		return
+	lowestsell = min(wordmarket, key=lambda sp:sp[1])
+	seller, amount = lowestsell
+	if currencybank[buyer] < amount:
+		return
+
+	if wordbanks[seller][word] <= 0:
+		return
+
+	wordbanks[seller][word] -= 1
+	# Neat trick to remove zero and negative counts from a Counter
+	wordbanks[seller] += Counter()
+
+	wordbanks[buyer][word] += 1
+
+	currencybank[buyer] -= amount
+	currencybank[seller] += amount
+
+	wordmarkets[word].remove(lowestsell)
 
 def handle_message(message: twitch.chat.Message) -> None:
 	#    message.chat.send(f'@{message.user().display_name}, you have {message.user().view_count} views.')
@@ -121,11 +146,14 @@ def handle_message(message: twitch.chat.Message) -> None:
 			cmd = f"!bid {choice(characters)} {randint(1,10)}"
 
 	else:
+		return#XXX
+		"""
 		available_words = list(wordmarkets.keys())
 		if not available_words:
 			return
 		user = WRITER
 		cmd =  f"!buy {choice(available_words)}"
+		"""
 
 
 	if not cmd.startswith("!"):
@@ -185,37 +213,17 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		wordmarkets[word].append([user, amount])
 
-		print(wordmarkets)
+		#print(wordmarkets)
 		txlog.append([user, cmd])
 
 	elif user == WRITER and cmd[0] == "buy" and len(cmd) >= 2:
 		word = cmd[1]
-		wordmarket = wordmarkets[word]
-		if not wordmarket:
-			return
-		lowestsell = min(wordmarket, key=lambda sp:sp[1])
-		seller, amount = lowestsell
-		if currencybank[WRITER] < amount:
-			return
-
-		if wordbanks[seller][word] <= 0:
-			return
-
-		wordbanks[seller][word] -= 1
-		# Neat trick to remove zero and negative counts from a Counter
-		wordbanks[seller] += Counter()
-
-		wordbanks[WRITER][word] += 1
-
-		currencybank[WRITER] -= amount
-		currencybank[seller] += amount
-
-		wordmarkets[word].remove(lowestsell)
+		buy_word(word)
 
 
 tmi = twitch.tmi.TMI(config["client_id"], config["client_secret"])
 
-
+"""
 try:
 	chat = twitch.Chat(channel="#"+config["channel"],
 					   nickname=config["nickname"],
@@ -225,13 +233,23 @@ try:
 	chat.subscribe(handle_message)
 except KeyboardInterrupt:
 	pass
+"""
 
+from threading import Thread
 
+class FakeChat(Thread):
+	def run(self):
+		while True:
+			handle_message(None)
+			sleep(0.1)
+
+fakechat = FakeChat()
+fakechat.start()
 
 pygame.init()
 pygame.font.init()
 
-FONTSIZE = 16
+FONTSIZE = 20
 
 font = pygame.font.SysFont("Mono", FONTSIZE)
 
@@ -260,6 +278,8 @@ clock = pygame.time.Clock()
 text_input = UITextEntryLine(Rect(20, 200, 200, 200), manager)
 
 running = True
+
+buybuttons = {}
 
 while running:
 
@@ -317,6 +337,15 @@ while running:
 	#if currencybank:
 	#	print(min(currencybank.values()), max(currencybank.values()), len(currencybank), len(active), Counter(currencybank.values()))
 
+	for event in pygame.event.get():
+		if event.type == pygame.QUIT:
+			running = False
+		elif event.type == pygame.USEREVENT:
+			if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
+				if event.ui_element in buybuttons:
+					wordsell = buybuttons[event.ui_element]
+					buy_word(wordsell[0])
+
 	for index, (user, cmd) in enumerate(txlog[-10:]):
 		renderText(f"<{user}> {' '.join(cmd)}", (w-300, index*FONTSIZE))
 
@@ -327,6 +356,9 @@ while running:
 			maxbid = None
 
 		renderText(f"{letter}: {maxbid}", (w//2-100, index*FONTSIZE))
+
+	newbuttons = {}
+
 
 	wordsells = []
 
@@ -339,7 +371,22 @@ while running:
 	wordsells = sorted(wordsells, key=lambda ws:ws[2])
 
 	for index, wordsell in enumerate(wordsells):
-		renderText(f"{str(wordsell[2]).rjust(4, ' ')}: {wordsell[0]} by {wordsell[1]}", (0, index*FONTSIZE))
+		wordsellstring = f"{str(wordsell[2]).rjust(4, ' ')}: {wordsell[0]} by {wordsell[1]}"
+		#renderText(wordsellstring, (0, index*FONTSIZE))
+		rect = Rect(0,22*index, 200, 22)
+		for button in list(buybuttons):
+			if button.text == wordsellstring:
+				del buybuttons[button]
+				button.rect = rect
+				newbuttons[button] = wordsell
+		else:
+			button = UIButton(rect, wordsellstring, manager)
+			newbuttons[button] = wordsell
+
+	for button in buybuttons:
+		button.kill()
+
+	buybuttons = newbuttons
 
 	y = h-100
 	currency = currencybank[WRITER]
@@ -370,10 +417,6 @@ while running:
 		wordbank = wordbanks[user]
 		inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
 		x = renderText(inventorystring, (x, y))
-
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			running = False
 
 		manager.process_events(event)
 
