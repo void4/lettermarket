@@ -348,13 +348,16 @@ while running:
 			elif event.user_type == pygame_gui.UI_TEXT_ENTRY_CHANGED:
 				text = event.ui_element.text
 				print("changed", text)
+				if len(text) == 0:
+					continue
+
 				if text[-1] != " ":
 					continue
 
 				tmp = deepcopy(wordbanks[WRITER])
 				result = []
 				for word in text.split():
-					print(word, tmp)
+					#print(word, tmp)
 					if tmp[word.upper()] <= 0:
 						continue
 					tmp[word.upper()] -= 1
@@ -418,7 +421,19 @@ while running:
 	x = renderText(" " + WRITER, (x, y))
 
 	wordbank = wordbanks[WRITER]
-	inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
+
+	# Calculate unused words
+	unused = deepcopy(wordbanks[WRITER])
+	for word in text_input.text.split():
+		#print(word, tmp)
+		if unused[word.upper()] <= 0:
+			continue
+		unused[word.upper()] -= 1
+
+	# Remove 0 entries
+	unused += Counter()
+
+	inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(unused.items(), key=lambda wc: wc[1], reverse=True))#wordbank.items()
 	x = renderText(inventorystring, (x, y))
 
 	for index, user in enumerate(active):
