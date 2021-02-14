@@ -396,13 +396,16 @@ while running:
 
 		renderText(f"{letter}: {bidstr}", (w-300, 100+index*FONTSIZE))
 
-	TXLOGLEN = 10
-	# Last commands and their result
-	for index, (user, cmd, status, result) in enumerate(txlog[-TXLOGLEN:]):
-		statuscolor = (0,200,0) if status else (200,0,0)
-		y = h-(TXLOGLEN-index)*FONTSIZE-100
-		x = renderText(f"<{user}> {' '.join(cmd)}", (w-500, y), statuscolor)
-		renderText((" "*4) + result, (x, y), statuscolor)
+	SHOWTXLOG = False
+
+	if SHOWTXLOG:
+		TXLOGLEN = 10
+		# Last commands and their result
+		for index, (user, cmd, status, result) in enumerate(txlog[-TXLOGLEN:]):
+			statuscolor = (0,200,0) if status else (200,0,0)
+			y = h-(TXLOGLEN-index)*FONTSIZE-100
+			x = renderText(f"<{user}> {' '.join(cmd)}", (w-500, y), statuscolor)
+			renderText((" "*4) + result, (x, y), statuscolor)
 
 	newbuttons = {}
 
@@ -448,9 +451,9 @@ while running:
 
 	buybuttons = newbuttons
 
-	y = h-100
+	y = 0
 	currency = currencybank[WRITER]
-	x = renderText(str(currency).rjust(8, ' '), (0, y))
+	x = renderText(str(currency).rjust(8, ' '), (200, y))
 
 	x = renderText(" " + WRITER, (x, y))
 
