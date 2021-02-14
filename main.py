@@ -48,8 +48,6 @@ characters = ascii_uppercase# + special#[:3]
 for char in characters:
 	auctions[char]
 
-#print(auctions)
-
 def cansubtract(letterbank, word):
 	letters = Counter(word)
 	for letter, count in letters.items():
@@ -121,6 +119,8 @@ def buy_word(word, buyer=WRITER, maxprice=None):
 
 	wordmarkets[word].remove(lowestsell)
 
+	txlog.append([buyer, ["buy", word]])
+
 def split(text):
 	delimiters = list(special)
 	result = []
@@ -179,7 +179,6 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		if subtract(letterbanks[user], word):
 			wordbanks[user][word] += 1
-			#print(wordbanks)
 			txlog.append([user, cmd])
 
 	elif cmd[0] == "bid" and len(cmd) >= 3:
@@ -222,7 +221,6 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		wordmarkets[word].append([user, amount])
 
-		#print(wordmarkets)
 		txlog.append([user, cmd])
 
 	elif user == WRITER and cmd[0] == "buy" and len(cmd) >= 2:
@@ -322,8 +320,6 @@ while running:
 
 			highestbids[letter] = highestbid
 
-		#print(highestbids)
-
 		auctions = defaultdict(list)
 		for char in characters:
 			auctions[char]
@@ -343,9 +339,6 @@ while running:
 
 	currencybank[WRITER] += fullseconds * WRITER_COINS_PER_SECOND
 
-	#if currencybank:
-	#	print(min(currencybank.values()), max(currencybank.values()), len(currencybank), len(active), Counter(currencybank.values()))
-
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			running = False
@@ -356,7 +349,6 @@ while running:
 					buy_word(wordsell[0])
 			elif event.user_type == pygame_gui.UI_TEXT_ENTRY_CHANGED:
 				text = event.ui_element.text
-				print("changed", text)
 				if len(text) == 0:
 					continue
 
@@ -366,7 +358,6 @@ while running:
 				tmp = deepcopy(wordbanks[WRITER])
 				result = []
 				for word in split(text):
-					print(word, tmp)
 					if word not in special:
 						if tmp[word.upper()] <= 0:
 							continue
