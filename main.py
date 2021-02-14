@@ -4,6 +4,7 @@ from time import time, sleep
 from string import ascii_uppercase
 from copy import deepcopy
 from random import choice, randint, random
+import re
 
 import twitch
 import pygame
@@ -41,7 +42,8 @@ wordmarkets = defaultdict(list)
 
 # in text box, allow greyed out words?
 
-characters = ascii_uppercase# + ".,;?!"#[:3]
+special = ".,;?!- "
+characters = ascii_uppercase# + special#[:3]
 
 for char in characters:
 	auctions[char]
@@ -118,6 +120,13 @@ def buy_word(word, buyer=WRITER, maxprice=None):
 	currencybank[seller] += amount
 
 	wordmarkets[word].remove(lowestsell)
+
+def split(text):
+	delimiters = list(special)
+	result = []
+	regexPattern = '(' + '|'.join(map(re.escape, delimiters)) + ')'
+	return re.split(regexPattern, text)
+
 
 def handle_message(message: twitch.chat.Message) -> None:
 	#    message.chat.send(f'@{message.user().display_name}, you have {message.user().view_count} views.')
@@ -275,7 +284,7 @@ active = []
 clock = pygame.time.Clock()
 # alternative: just increment by one every second, stop on leave
 
-text_input = UITextEntryLine(Rect(20, 200, 200, 200), manager)
+text_input = UITextEntryLine(Rect(20, 600, 600, 300), manager)
 
 running = True
 
@@ -356,16 +365,15 @@ while running:
 
 				tmp = deepcopy(wordbanks[WRITER])
 				result = []
-				for word in text.split():
-					#print(word, tmp)
-					if tmp[word.upper()] <= 0:
-						continue
-					tmp[word.upper()] -= 1
+				for word in split(text):
+					print(word, tmp)
+					if word not in special:
+						if tmp[word.upper()] <= 0:
+							continue
+						tmp[word.upper()] -= 1
 					result.append(word)
 
-				text = " ".join(result)
-				if len(text) > 0:
-					text += " "
+				text = "".join(result)
 				event.ui_element.text = text
 
 		manager.process_events(event)
@@ -424,11 +432,12 @@ while running:
 
 	# Calculate unused words
 	unused = deepcopy(wordbanks[WRITER])
-	for word in text_input.text.split():
-		#print(word, tmp)
-		if unused[word.upper()] <= 0:
-			continue
-		unused[word.upper()] -= 1
+	for word in split(text_input.text):
+		if word not in special:
+			#print(word, tmp)
+			if unused[word.upper()] <= 0:
+				continue
+			unused[word.upper()] -= 1
 
 	# Remove 0 entries
 	unused += Counter()
