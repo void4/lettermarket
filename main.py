@@ -99,13 +99,16 @@ txlog = []
 def buy_word(word, buyer=WRITER, maxprice=None):
 	wordmarket = wordmarkets[word]
 	if not wordmarket:
+		txlog.append([buyer, ["buy", word], "no market for this word"])
 		return
 	lowestsell = min(wordmarket, key=lambda sp:sp[1])
 	seller, amount = lowestsell
 	if currencybank[buyer] < amount:
+		txlog.append([buyer, ["buy", word], "don't have that much"])
 		return
 
 	if wordbanks[seller][word] <= 0:
+		txlog.append([buyer, ["buy", word], "seller doesn't have word anymore"])
 		return
 
 	wordbanks[seller][word] -= 1
@@ -119,7 +122,7 @@ def buy_word(word, buyer=WRITER, maxprice=None):
 
 	wordmarkets[word].remove(lowestsell)
 
-	txlog.append([buyer, ["buy", word]])
+	txlog.append([buyer, ["buy", word], "success"])
 
 def split(text):
 	delimiters = list(special)
@@ -172,38 +175,46 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	#print(cmd)
 
+	def log(result="success"):
+		txlog.append([user, cmd, result])
+
 	if cmd[0] == "combine" and len(cmd) >= 2:
 		word = cmd[1]
 		if word is None:
+			log("missing word")
 			return
 
 		if subtract(letterbanks[user], word):
 			wordbanks[user][word] += 1
-			txlog.append([user, cmd])
+			log()
 
 	elif cmd[0] == "bid" and len(cmd) >= 3:
 		letter = cmd[1]
 		amount = int(cmd[2])#XXX ValueError
 
 		if amount < 1:
+			log("too cheap")
 			return
 
 		# can't bid more than you have in that moment # apply to total bids?
 		if currencybank[user] < amount:
+			log("you don't have that much")
 			return
 
 		auctions[letter].append([user, amount])
-		txlog.append([user, cmd])
+		log()
 
 	elif cmd[0] == "sell" and len(cmd) >= 3:
 		word = cmd[1]
 		amount = int(cmd[2])
 
 		if amount < 1:
+			log("too cheap")
 			return
 
 		# TODO max amount
 		if amount >= 1000000:
+			log("too expensive")
 			return
 
 		# Also add timestamp to order
@@ -213,6 +224,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 		# can only sell words one owns
 		if wordbanks[user][word] == 0:
 			# TODO reply
+			log("you don't have that word")
 			return
 
 		# can only sell one at a time?
@@ -221,7 +233,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		wordmarkets[word].append([user, amount])
 
-		txlog.append([user, cmd])
+		log()
 
 	elif user == WRITER and cmd[0] == "buy" and len(cmd) >= 2:
 		word = cmd[1]
@@ -264,7 +276,7 @@ pygame.display.set_caption("lettermarket")
 
 color = (100, 100, 100)
 
-w = 1920//2
+w = 1920
 h = 1080
 
 screen = pygame.display.set_mode((w,h))
@@ -369,20 +381,30 @@ while running:
 
 		manager.process_events(event)
 
+	# Time remaining until auction settlement
+	secondsleft = everyminute.interval-(int(time()-everyminute.lasttime))
+	renderText(f"Auction resolution in {secondsleft}", (w-300, 0))
 
-	for index, (user, cmd) in enumerate(txlog[-10:]):
-		renderText(f"<{user}> {' '.join(cmd)}", (w-300, index*FONTSIZE))
-
+	# All ongoing auctions
 	for index, (letter, bids) in enumerate(auctions.items()):
 		if bids:
-			maxbid = max([bid[1] for bid in bids])
+			maxbid = max(bids, key=lambda bid:bid[1])
 		else:
 			maxbid = None
 
-		renderText(f"{letter}: {maxbid}", (w//2-100, index*FONTSIZE))
+		bidstr = "Ø" if maxbid is None else f"{maxbid[1]} by {maxbid[0]}"
+
+		renderText(f"{letter}: {bidstr}", (w-300, 100+index*FONTSIZE))
+
+	TXLOGLEN = 10
+	# Last commands and their result
+	for index, (user, cmd, status) in enumerate(txlog[-TXLOGLEN:]):
+		y = h-(TXLOGLEN-index)*FONTSIZE-100
+		x = renderText(f"<{user}> {' '.join(cmd)}", (w-500, y))
+		statuscolor = (0,200,0) if status == "success" else (200,0,0)
+		renderText((" "*4) + status, (x, y), statuscolor)
 
 	newbuttons = {}
-
 
 	wordsells = []
 
