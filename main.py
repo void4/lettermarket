@@ -14,7 +14,7 @@ from pygame_gui.elements.ui_button import UIButton
 from pygame_gui.elements.ui_text_entry_line import UITextEntryLine
 from pygame_gui.elements.ui_text_box import UITextBox
 
-from utils import Every
+from utils import Every, gradient, tohex
 
 WRITER_COINS_PER_SECOND = 5
 
@@ -402,11 +402,19 @@ while running:
 		for button in list(buybuttons):
 			if button.text == wordsellstring:
 				del buybuttons[button]
-				button.rect = rect
+				if button.rect != rect:
+					button.unselect()
+					button.rect = rect
 				newbuttons[button] = wordsell
+				break
 		else:
 			button = UIButton(rect, wordsellstring, manager)
 			newbuttons[button] = wordsell
+
+		button.colours["normal_text"] = pygame.Color(0,0,0)
+		button.colours["normal_bg"] = pygame.Color(*gradient(wordsell[2]/max(1,currencybank[WRITER])))#"#ff0000"#(255,0,0)
+		#button.rebuild_from_changed_theme_data()
+		button.rebuild()
 
 	for button in buybuttons:
 		button.kill()
