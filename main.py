@@ -42,7 +42,7 @@ wordmarkets = defaultdict(list)
 
 # in text box, allow greyed out words?
 
-special = ".,;?!- "
+special = ".,:;?!- \n"
 characters = ascii_uppercase# + special#[:3]
 
 for char in characters:
@@ -410,6 +410,11 @@ while running:
 		else:
 			button = UIButton(rect, wordsellstring, manager)
 			newbuttons[button] = wordsell
+
+			if wordsell[2] > currencybank[WRITER]:
+				button.disable()
+			else:
+				button.enable()
 
 		button.colours["normal_text"] = pygame.Color(0,0,0)
 		button.colours["normal_bg"] = pygame.Color(*gradient(wordsell[2]/max(1,currencybank[WRITER])))#"#ff0000"#(255,0,0)
