@@ -190,7 +190,10 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	elif user == WRITER and cmd[0] == "buy" and len(cmd) >= 2:
 		word = cmd[1]
-		lowestsell = min(wordmarkets[word], key=lambda sp:sp[1])
+		wordmarket = wordmarkets[word]
+		if not wordmarket:
+			return
+		lowestsell = min(wordmarket, key=lambda sp:sp[1])
 		seller, amount = lowestsell
 		if currencybank[WRITER] < amount:
 			return
@@ -206,6 +209,8 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 		currencybank[WRITER] -= amount
 		currencybank[seller] += amount
+
+		wordmarkets[word].remove(lowestsell)
 
 
 tmi = twitch.tmi.TMI(config["client_id"], config["client_secret"])
@@ -326,6 +331,8 @@ while running:
 	wordsells = []
 
 	for word, sells in wordmarkets.items():
+		if not sells:
+			continue
 		minsell = min(sells, key=lambda sell:sell[1])
 		wordsells.append([word, minsell[0], minsell[1]])
 
@@ -337,6 +344,8 @@ while running:
 	y = h-100
 	currency = currencybank[WRITER]
 	x = renderText(str(currency).rjust(8, ' '), (0, y))
+
+	x = renderText(" " + WRITER, (x, y))
 
 	wordbank = wordbanks[WRITER]
 	inventorystring = (" "*8) + " ".join(f"{word}({count})" for word, count in sorted(wordbank.items(), key=lambda wc: wc[1], reverse=True))
@@ -350,6 +359,8 @@ while running:
 
 		currency = currencybank[user]
 		x = renderText(str(currency).rjust(8, ' '), (0, y))
+
+		x = renderText(" " + user, (x, y))
 
 		letterbank = letterbanks[user]
 		#inventorystring = " ".join(f"{letter}({count})" for letter, count in sorted(letterbank.items(), key=lambda lc:lc[1], reverse=True))
