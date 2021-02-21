@@ -21,7 +21,7 @@ WRITER_COINS_PER_SECOND = 5
 en1000 = [word.upper() for word in open("en1000.txt").read().splitlines()]
 
 everysecond = Every(1)
-everyminute = Every(5)#XXX 60
+everyminute = Every(45)#XXX 60
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -136,8 +136,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	#print("MESSAGE", message.sender, message.text)
 
-	#XXX user = message.sender
-
+	"""
 	# Simulate
 	if random() < 0.95:
 		user = f"user{randint(0,2)}"
@@ -159,14 +158,21 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 	else:
 		return#XXX
-		"""
+		XXX
 		available_words = list(wordmarkets.keys())
 		if not available_words:
 			return
 		user = WRITER
 		cmd =  f"!buy {choice(available_words)}"
-		"""
-
+	"""
+	if message is None:
+		return
+	print(message)
+	cmd = message.text
+	user = message.sender
+	
+	if user not in currencybank:
+		currencybank[user] = 10
 
 	if not cmd.startswith("!"):
 		return
@@ -179,7 +185,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 		txlog.append([user, cmd, status, result])
 
 	if cmd[0] == "combine" and len(cmd) >= 2:
-		word = cmd[1]
+		word = cmd[1].upper()
 		if word is None:
 			log(False, "missing word")
 			return
@@ -189,7 +195,11 @@ def handle_message(message: twitch.chat.Message) -> None:
 			log()
 
 	elif cmd[0] == "bid" and len(cmd) >= 3:
-		letter = cmd[1]
+		letter = cmd[1].upper()
+		
+		if len(letter) != 1:
+			return
+		
 		amount = int(cmd[2])#XXX ValueError
 
 		if amount < 1:
@@ -205,7 +215,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 		log(True, "submitted")
 
 	elif cmd[0] == "sell" and len(cmd) >= 3:
-		word = cmd[1]
+		word = cmd[1].upper()
 		amount = int(cmd[2])
 
 		if amount < 1:
@@ -242,7 +252,7 @@ def handle_message(message: twitch.chat.Message) -> None:
 
 tmi = twitch.tmi.TMI(config["client_id"], config["client_secret"])
 
-"""
+
 try:
 	chat = twitch.Chat(channel="#"+config["channel"],
 					   nickname=config["nickname"],
@@ -252,7 +262,7 @@ try:
 	chat.subscribe(handle_message)
 except KeyboardInterrupt:
 	pass
-"""
+
 
 from threading import Thread
 
@@ -262,8 +272,8 @@ class FakeChat(Thread):
 			handle_message(None)
 			sleep(0.1)
 
-fakechat = FakeChat()
-fakechat.start()
+#fakechat = FakeChat()
+#fakechat.start()
 
 pygame.init()
 pygame.font.init()
@@ -337,8 +347,8 @@ while running:
 			auctions[char]
 
 	if everysecond:
-		#XXX active = [chatter.name for chatter in tmi.chatters(config["channel"]).all()]
-		active = list(set([f"user{i}" for i in range(3)]))
+		active = [chatter.name for chatter in tmi.chatters(config["channel"]).all()]
+		#active = list(set([f"user{i}" for i in range(3)]))
 
 	now = time()
 
@@ -396,7 +406,7 @@ while running:
 
 		renderText(f"{letter}: {bidstr}", (w-300, 100+index*FONTSIZE))
 
-	SHOWTXLOG = False
+	SHOWTXLOG = True
 
 	if SHOWTXLOG:
 		TXLOGLEN = 10
